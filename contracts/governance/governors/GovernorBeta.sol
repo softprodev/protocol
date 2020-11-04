@@ -21,8 +21,6 @@ pragma experimental ABIEncoderV2;
 import "./GovernorAlpha.sol";
 import "../dmg/SafeBitMath.sol";
 
-import "../../external/asset_introducers/v1/IAssetIntroducerV1.sol";
-
 contract GovernorBeta is GovernorAlpha {
 
     using SafeBitMath for uint128;
@@ -44,16 +42,15 @@ contract GovernorBeta is GovernorAlpha {
     /// A wrapped variant of DMG for when the user stakes DMG in an official contract and still needs access to their
     /// ballots
     IDMGToken public wDmg;
-    IAssetIntroducerV1 public assetIntroducerProxy;
     mapping(address => mapping(address => bool)) internal _voterToLocalOperatorToIsSupportedMap;
     mapping(address => bool) internal _globalOperatorToIsSupportedMap;
 
     constructor(
-        address __wDmg,
-        address __dmg,
-        address __guardian
-    ) public GovernorAlpha(__dmg, __guardian) {
-        wDmg = IDMGToken(__wDmg);
+        address wDmg_,
+        address dmg_,
+        address guardian_
+    ) public GovernorAlpha(dmg_, guardian_) {
+        wDmg = IDMGToken(wDmg_);
     }
 
     // *************************
@@ -61,16 +58,16 @@ contract GovernorBeta is GovernorAlpha {
     // *************************
 
     function setGlobalOperator(
-        address __operator,
-        bool __isTrusted
+        address operator,
+        bool isTrusted
     ) public {
         require(
             address(timelock) == msg.sender || guardian == msg.sender,
             "GovernorBeta::setGlobalOperator: UNAUTHORIZED"
         );
 
-        _globalOperatorToIsSupportedMap[__operator] = __isTrusted;
-        emit GlobalOperatorSet(__operator, __isTrusted);
+        _globalOperatorToIsSupportedMap[operator] = isTrusted;
+        emit GlobalOperatorSet(operator, isTrusted);
     }
 
     // *************************
@@ -78,11 +75,11 @@ contract GovernorBeta is GovernorAlpha {
     // *************************
 
     function setLocalOperator(
-        address __operator,
-        bool __isTrusted
+        address operator,
+        bool isTrusted
     ) public {
-        _voterToLocalOperatorToIsSupportedMap[msg.sender][__operator] = __isTrusted;
-        emit LocalOperatorSet(msg.sender, __operator, __isTrusted);
+        _voterToLocalOperatorToIsSupportedMap[msg.sender][operator] = isTrusted;
+        emit LocalOperatorSet(msg.sender, operator, isTrusted);
     }
 
     /**
@@ -94,13 +91,13 @@ contract GovernorBeta is GovernorAlpha {
      * @return The amount of votes the user casted in favor of or against the proposal.
      */
     function castVote(
-        address __voter,
-        uint __proposalId,
-        bool __support
+        address voter,
+        uint proposalId,
+        bool support
     )
-    onlyTrustedOperator(__voter)
+    onlyTrustedOperator(voter)
     public returns (uint128) {
-        return _castVote(__voter, __proposalId, __support);
+        return _castVote(voter, proposalId, support);
     }
 
     // *************************
@@ -108,18 +105,18 @@ contract GovernorBeta is GovernorAlpha {
     // *************************
 
     function getIsLocalOperator(
-        address __voter,
-        address __operator
+        address voter,
+        address operator
     )
     public view returns (bool) {
-        return _voterToLocalOperatorToIsSupportedMap[__voter][__operator];
+        return _voterToLocalOperatorToIsSupportedMap[voter][operator];
     }
 
     function getIsGlobalOperator(
-        address __operator
+        address operator
     )
     public view returns (bool) {
-        return _globalOperatorToIsSupportedMap[__operator];
+        return _globalOperatorToIsSupportedMap[operator];
     }
 
     // *************************
@@ -127,17 +124,12 @@ contract GovernorBeta is GovernorAlpha {
     // *************************
 
     function _getVotes(
-        address __user,
-        uint __blockNumber
+        address user,
+        uint blockNumber
     ) internal view returns (uint128) {
-        uint128 dmgVotes = SafeBitMath.add128(
-            dmg.getPriorVotes(__user, __blockNumber),
-            wDmg.getPriorVotes(__user, __blockNumber)
-        );
-
         return SafeBitMath.add128(
-            dmgVotes,
-            assetIntroducerProxy.getPriorVotes(__user, __blockNumber)
+            dmg.getPriorVotes(user, blockNumber),
+            wDmg.getPriorVotes(user, blockNumber)
         );
     }
 

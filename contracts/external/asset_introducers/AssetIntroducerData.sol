@@ -25,87 +25,38 @@ import "../../governance/dmg/IDMGToken.sol";
 contract AssetIntroducerData is Initializable, IOwnableOrGuardian {
 
     // *************************
-    // ***** Constants
-    // *************************
-
-    uint internal constant LINKED_LIST_GUARD = uint(1);
-
-    string public constant NAME = "AssetIntroducer";
-
-    // *************************
     // ***** V1 State Variables
     // *************************
 
-    /// The timestamp at which this contract was initialized
-    uint64 _initTimestamp;
-
     address internal _dmg;
-
-    address internal _underlyingTokenValuator;
-
-    uint internal _totalDmgLocked;
-
-    bytes32 _domainSeparator;
-
-    uint internal _totalSupply;
-
-    uint[] internal _allTokens;
-
-    mapping(uint => AssetIntroducer) internal _idToAssetIntroducer;
+    address internal _wDmg;
 
     /**
-     * @dev Mapping from NFT ID to owner address.
+     * @dev A mapping from NFT ID to the address that owns it.
      */
-    mapping(uint256 => address) internal _idToOwnerMap;
+    mapping(uint256 => address) internal _idToOwner;
 
     /**
      * @dev Mapping from NFT ID to approved address.
      */
-    mapping(uint256 => address) internal _idToSpenderMap;
+    mapping(uint256 => address) internal _idToApproval;
 
     /**
-     * @dev Mapping from owner to an operator that can spend all of owner's NFTs.
-     */
-    mapping(address => mapping(address => bool)) internal _ownerToOperatorToIsApprovedMap;
-
-    /**
-     * @dev Mapping for the count of each user's off-chain signed messages. 0-indexed.
-     */
-    mapping(address => uint) internal _ownerToNonceMap;
-
-    /**
-     * @dev  Mapping from owner address to all owned token IDs. Works as a linked list such that previous key --> next
-     *       value. The 0th key in the list is LINKED_LIST_GUARD.
-     */
-    mapping(address => mapping(uint => uint)) internal _ownerToTokenIds;
-
-    /**
-    * @dev Mapping from owner address to a count of all owned NFTs.
+    * @dev Mapping from owner address to count of his tokens.
     */
-    mapping(address => uint32) internal _ownerToTokenCount;
+    mapping(address => uint256) internal _ownerToTokenCount;
 
-    mapping(bytes3 => mapping(uint8 => uint[])) internal _countryCodeToAssetIntroducerTypeToTokenIdsMap;
+    /**
+     * @dev Mapping from owner address to mapping of operator addresses.
+     */
+    mapping(address => mapping(address => bool)) internal _ownerToOperators;
+
+    mapping(bytes4 => mapping(uint8 => uint16)) internal _countryCodeToAssetIntroducerTypeToCountMap;
 
     /**
      * @dev Mapping from an interface to whether or not it's supported.
      */
-    mapping(bytes4 => bool) internal _interfaceIdToIsSupportedMap;
-
-    /**
-     * @dev Taken from the DMG token implementation
-     */
-    mapping(address => mapping(uint64 => Checkpoint)) internal _ownerToCheckpointIndexToCheckpointMap;
-
-    /**
-     * @dev Taken from the DMG token implementation
-     */
-    mapping(address => uint64) internal _ownerToCheckpointCountMap;
-
-    /**
-     * @dev A mapping from the country code to asset introducer type to the cost needed to buy one. The cost is
-     *      represented in USD (with 18 decimals) and is purchased using DMG, so a conversion is needed using Chainlink.
-     */
-    mapping(bytes3 => mapping(uint8 => uint96)) internal _countryCodeToAssetIntroducerTypeToPriceUsd;
+    mapping(bytes4 => bool) internal _supportedInterfaces;
 
     // *************************
     // ***** Data Structures
@@ -116,7 +67,7 @@ contract AssetIntroducerData is Initializable, IOwnableOrGuardian {
     }
 
     struct AssetIntroducer {
-        bytes3 countryCode;
+        bytes4 countryCode;
         AssetIntroducerType introducerType;
         /// True if the asset introducer has been purchased yet, false if it hasn't and is thus
         bool isOnSecondaryMarket;
@@ -124,57 +75,6 @@ contract AssetIntroducerData is Initializable, IOwnableOrGuardian {
         /// An override on how much this asset introducer can manager; the default amount for a `countryCode` and
         /// `introducerType` can be retrieved via function call
         uint104 dollarAmountToManage;
-        uint tokenId;
-    }
-
-    /// Used for tracking delegation and number of votes each user has at a given block height.
-    struct Checkpoint {
-        uint64 fromBlock;
-        uint128 votes;
-    }
-
-    /// Used to prevent the "stack too deep" error and make code more readable
-    struct DmgApprovalStruct {
-        address spender;
-        uint rawAmount;
-        uint nonce;
-        uint expiry;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-    }
-
-    // *************************
-    // ***** Modifiers
-    // *************************
-
-    /// Enforces that an NFT has NOT been sold to a user yet
-    modifier requireIsPrimaryMarketNft(uint __tokenId) {
-        require(
-            !_idToAssetIntroducer[__tokenId].isOnSecondaryMarket,
-            "AssetIntroducerData: IS_SECONDARY_MARKET"
-        );
-
-        _;
-    }
-
-    /// Enforces that an NFT has been sold to a user
-    modifier requireIsSecondaryMarketNft(uint __tokenId) {
-        require(
-            _idToAssetIntroducer[__tokenId].isOnSecondaryMarket,
-            "AssetIntroducerData: IS_PRIMARY_MARKET"
-        );
-
-        _;
-    }
-
-    modifier requireIsValidNft(uint __tokenId) {
-        require(
-            _idToOwnerMap[__tokenId] != address(0),
-            "AssetIntroducerData: INVALID_NFT"
-        );
-
-        _;
     }
 
 }
