@@ -16,7 +16,6 @@
 
 
 pragma solidity ^0.5.0;
-pragma experimental ABIEncoderV2;
 
 import "../AssetIntroducerData.sol";
 
@@ -26,19 +25,17 @@ interface IAssetIntroducerV1 {
     // ***** Events
     // *************************
 
-    event SignatureValidated(address indexed signer, uint nonce);
     event AssetIntroducerBought(uint indexed tokenId, address indexed buyer, uint dmgAmount);
-    event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance);
 
     // *************************
     // ***** Admin Functions
     // *************************
 
-    function createAssetIntroducersForPrimaryMarket(
-        string[] calldata countryCode,
-        AssetIntroducerData.AssetIntroducerType[] calldata introducerType,
-        uint[] calldata dmgPriceAmount
-    ) external returns (uint[] memory);
+    function createAssetIntroducerForPrimaryMarket(
+        string calldata countryCode,
+        AssetIntroducerData.AssetIntroducerType introducerType,
+        uint dmgPriceAmount
+    ) external returns (uint);
 
     function setDollarAmountToManageByTokenId(
         uint tokenId,
@@ -59,10 +56,6 @@ interface IAssetIntroducerV1 {
         uint tokenId
     ) external returns (bool);
 
-    function nonceOf(
-        address user
-    ) external view returns (uint);
-
     function buyAssetIntroducerSlotBySig(
         uint tokenId,
         address recipient,
@@ -78,12 +71,7 @@ interface IAssetIntroducerV1 {
         uint tokenId
     ) external returns (uint);
 
-    function getPriorVotes(
-        address user,
-        uint blockNumber
-    ) external view returns (uint128);
-
-    function getCurrentVotes(
+    function getCurrentVotesByUser(
         address user
     ) external view returns (uint);
 
@@ -104,12 +92,6 @@ interface IAssetIntroducerV1 {
     function getAssetIntroducersByCountryCode(
         string calldata countryCode
     ) external view returns (uint[] memory);
-
-    // *************************
-    // ***** Misc Functions
-    // *************************
-
-    function domainSeparator() external view returns (bytes32);
 
     /**
      * @return  The address of the DMG token

@@ -25,73 +25,38 @@ import "../../governance/dmg/IDMGToken.sol";
 contract AssetIntroducerData is Initializable, IOwnableOrGuardian {
 
     // *************************
-    // ***** Constants
-    // *************************
-
-    uint internal constant LINKED_LIST_GUARD = uint(1);
-
-    string public constant NAME = "AssetIntroducer";
-
-    // *************************
     // ***** V1 State Variables
     // *************************
 
     address internal _dmg;
-
-    uint internal _totalDmgLocked;
-
-    bytes32 _domainSeparator;
-
-    uint internal _totalSupply;
-
-    uint[] internal _allTokens;
-
-    mapping(uint => AssetIntroducer) internal _idToAssetIntroducer;
+    address internal _wDmg;
 
     /**
-     * @dev Mapping from NFT ID to owner address.
+     * @dev A mapping from NFT ID to the address that owns it.
      */
-    mapping(uint256 => address) internal _idToOwnerMap;
+    mapping(uint256 => address) internal _idToOwner;
 
     /**
      * @dev Mapping from NFT ID to approved address.
      */
-    mapping(uint256 => address) internal _idToSpenderMap;
+    mapping(uint256 => address) internal _idToApproval;
 
     /**
-     * @dev Mapping from owner to an operator that can spend all of owner's NFTs.
+    * @dev Mapping from owner address to count of his tokens.
+    */
+    mapping(address => uint256) internal _ownerToTokenCount;
+
+    /**
+     * @dev Mapping from owner address to mapping of operator addresses.
      */
-    mapping(address => mapping(address => bool)) internal _ownerToOperatorToIsApprovedMap;
+    mapping(address => mapping(address => bool)) internal _ownerToOperators;
 
-    mapping(address => uint) internal _ownerToNonceMap;
-
-    /**
-    * @dev  Mapping from owner address to all owned token IDs. Works as a linked list such that previous key --> next
-    *       value. The 0th key in the list is LINKED_LIST_GUARD.
-    */
-    mapping(address => mapping(uint => uint)) internal _ownerToTokenIds;
-
-    /**
-    * @dev Mapping from owner address to a count of all owned NFTs.
-    */
-    mapping(address => uint32) internal _ownerToTokenCount;
-
-    mapping(bytes3 => mapping(uint8 => uint[])) internal _countryCodeToAssetIntroducerTypeToTokenIdsMap;
+    mapping(bytes4 => mapping(uint8 => uint16)) internal _countryCodeToAssetIntroducerTypeToCountMap;
 
     /**
      * @dev Mapping from an interface to whether or not it's supported.
      */
-    mapping(bytes4 => bool) internal _interfaceIdToIsSupportedMap;
-
-    /**
-     * @dev Taken from the DMG token implementation
-     */
-    mapping(address => mapping(uint64 => Checkpoint)) internal _ownerToCheckpointIndexToCheckpointMap;
-
-    /**
-     * @dev Taken from the DMG token implementation
-     */
-    mapping(address => uint64) internal _ownerToCheckpointCountMap;
+    mapping(bytes4 => bool) internal _supportedInterfaces;
 
     // *************************
     // ***** Data Structures
@@ -102,7 +67,7 @@ contract AssetIntroducerData is Initializable, IOwnableOrGuardian {
     }
 
     struct AssetIntroducer {
-        bytes3 countryCode;
+        bytes4 countryCode;
         AssetIntroducerType introducerType;
         /// True if the asset introducer has been purchased yet, false if it hasn't and is thus
         bool isOnSecondaryMarket;
@@ -110,52 +75,6 @@ contract AssetIntroducerData is Initializable, IOwnableOrGuardian {
         /// An override on how much this asset introducer can manager; the default amount for a `countryCode` and
         /// `introducerType` can be retrieved via function call
         uint104 dollarAmountToManage;
-    }
-
-    struct Checkpoint {
-        uint64 fromBlock;
-        uint128 votes;
-    }
-
-    struct DmgApprovalStruct {
-        address spender;
-        uint rawAmount;
-        uint nonce;
-        uint expiry;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-    }
-
-    // *************************
-    // ***** Modifiers
-    // *************************
-
-    modifier requireIsPrimaryMarketNft(uint __tokenId) {
-        require(
-            !_idToAssetIntroducer[__tokenId].isOnSecondaryMarket,
-            "AssetIntroducerData: IS_SECONDARY_MARKET"
-        );
-
-        _;
-    }
-
-    modifier requireIsSecondaryMarketNft(uint __tokenId) {
-        require(
-            _idToAssetIntroducer[__tokenId].isOnSecondaryMarket,
-            "AssetIntroducerData: IS_PRIMARY_MARKET"
-        );
-
-        _;
-    }
-
-    modifier requireIsValidNft(uint __tokenId) {
-        require(
-            _idToOwnerMap[__tokenId] != address(0),
-            "AssetIntroducerData: INVALID_NFT"
-        );
-
-        _;
     }
 
 }
