@@ -25,8 +25,6 @@ import "../../uniswap/interfaces/IUniswapV2Router02.sol";
 import "../../uniswap/libs/UniswapV2Library.sol";
 
 import "../../../governance/dmg/IDMGToken.sol";
-import "../../../protocol/interfaces/IDmmController.sol";
-import "../../../protocol/interfaces/IUnderlyingTokenValuator.sol";
 import "../../../utils/IERC20WithDecimals.sol";
 
 import "../DMGYieldFarmingData.sol";
@@ -45,8 +43,7 @@ library DMGYieldFarmingV2Lib {
 
     enum TokenType {
         Unknown,
-        UniswapLpToken,
-        UniswapPureLpToken // Does not have an mToken base pairing. IE DMG-ETH
+        UniswapLpToken
     }
 
     // ////////////////////
@@ -62,174 +59,6 @@ library DMGYieldFarmingV2Lib {
     // ////////////////////
     // Functions
     // ////////////////////
-
-    /**
-     * @return  The dollar value of `tokenAmount`, formatted as a number with 18 decimal places
-     */
-    function _getUsdValueByTokenAndTokenAmount(
-        IDMGYieldFarmingV2 state,
-        address __farmToken,
-        uint __tokenAmount
-    ) public view returns (uint) {
-        address underlyingToken = state.getUnderlyingTokenByFarmToken(__farmToken);
-        address __underlyingTokenValuator = state.underlyingTokenValuator();
-        DMGYieldFarmingV2Lib.TokenType tokenType = state.getTokenTypeByToken(__farmToken);
-
-        if (tokenType == DMGYieldFarmingV2Lib.TokenType.UniswapLpToken) {
-            return _getUsdValueByTokenAndAmountForUniswapLpToken(
-                __farmToken,
-                __tokenAmount,
-                underlyingToken,
-                state.getTokenDecimalsByToken(__farmToken),
-                state.dmmController(),
-                __underlyingTokenValuator
-            );
-        } else if (tokenType == DMGYieldFarmingV2Lib.TokenType.UniswapPureLpToken) {
-            (address otherToken, uint underlyingTokenReserveAmount, uint otherTokenReserveAmount) = _getUniswapParams(__farmToken, underlyingToken);
-
-            uint totalSupply = IERC20(__farmToken).totalSupply();
-            require(
-                totalSupply > 0,
-                "DMGYieldFarmingV2::_getUsdValueByTokenAndTokenAmount: INVALID_TOTAL_SUPPLY"
-            );
-            uint8 underlyingTokenDecimals = state.getTokenDecimalsByToken(__farmToken);
-
-            uint underlyingTokenUsdValue = _getUnderlyingTokenUsdValueFromUniswapPool(
-                __tokenAmount,
-                totalSupply,
-                underlyingToken,
-                underlyingTokenReserveAmount,
-                underlyingTokenDecimals,
-                __underlyingTokenValuator
-            );
-
-            uint otherTokenUsdValue = _getUnderlyingTokenUsdValueFromUniswapPool(
-                __tokenAmount,
-                totalSupply,
-                otherToken,
-                otherTokenReserveAmount,
-                IERC20WithDecimals(otherToken).decimals(),
-                __underlyingTokenValuator
-            );
-
-            return underlyingTokenUsdValue.add(otherTokenUsdValue);
-        } else {
-            revert("DMGYieldFarmingV2::_getUsdValueByTokenAndTokenAmount: INVALID_TOKEN_TYPE");
-        }
-    }
-
-    function _getUsdValueByTokenAndAmountForUniswapLpToken(
-        address __farmToken,
-        uint __farmTokenAmount,
-        address __underlyingToken,
-        uint8 __underlyingTokenDecimals,
-        address __dmmController,
-        address __underlyingTokenValuator
-    ) internal view returns (uint) {
-        (address mToken, uint underlyingTokenAmount, uint mTokenAmount) = _getUniswapParams(__farmToken, __underlyingToken);
-
-        uint totalSupply = IERC20(__farmToken).totalSupply();
-        require(
-            totalSupply > 0,
-            "DMGYieldFarmingV2::_getUsdValueByTokenAndTokenAmount: INVALID_TOTAL_SUPPLY"
-        );
-
-        uint underlyingTokenUsdValue = _getUnderlyingTokenUsdValueFromUniswapPool(
-            __farmTokenAmount,
-            totalSupply,
-            __underlyingToken,
-            underlyingTokenAmount,
-            __underlyingTokenDecimals,
-            __underlyingTokenValuator
-        );
-
-        uint mTokenUsdValue = _getMTokenUsdValueFromUniswapPool(
-            __farmTokenAmount,
-            totalSupply,
-            mToken,
-            mTokenAmount,
-            IERC20WithDecimals(mToken).decimals(),
-            __dmmController,
-            __underlyingTokenValuator
-        );
-
-        return underlyingTokenUsdValue.add(mTokenUsdValue);
-    }
-
-    function _getUniswapParams(
-        address __farmToken,
-        address __underlyingToken
-    ) public view returns (address otherToken, uint underlyingTokenAmount, uint otherTokenAmount) {
-        address token0 = IUniswapV2Pair(__farmToken).token0();
-        address token1 = IUniswapV2Pair(__farmToken).token1();
-
-        require(
-            __underlyingToken == token0 || __underlyingToken == token1,
-            "DMGYieldFarmingV2Lib::_getUniswapParams: INVALID_UNDERLYING"
-        );
-
-        otherToken = __underlyingToken == token0 ? token1 : token0;
-
-        (uint112 reserve0, uint112 reserve1,) = IUniswapV2Pair(__farmToken).getReserves();
-        underlyingTokenAmount = __underlyingToken == token0 ? reserve0 : reserve1;
-        otherTokenAmount = __underlyingToken == token0 ? reserve1 : reserve0;
-    }
-
-    function _getUnderlyingTokenUsdValueFromUniswapPool(
-        uint __tokenAmount,
-        uint __totalSupply,
-        address __underlyingToken,
-        uint __underlyingTokenReserveAmount,
-        uint8 __underlyingTokenDecimals,
-        address __underlyingTokenValuator
-    ) public view returns (uint) {
-        uint underlyingTokenAmount = __tokenAmount
-        .mul(__underlyingTokenReserveAmount)
-        .div(__totalSupply);
-
-        return _getUsdValueForUnderlyingTokenAmount(
-            __underlyingToken,
-            __underlyingTokenValuator,
-            __underlyingTokenDecimals,
-            underlyingTokenAmount
-        );
-    }
-
-    function _getMTokenUsdValueFromUniswapPool(
-        uint __tokenAmount,
-        uint __totalSupply,
-        address __mToken,
-        uint __mTokenReserveAmount,
-        uint8 __mTokenDecimals,
-        address __dmmController,
-        address __underlyingTokenValuator
-    ) public view returns (uint) {
-        uint mTokenAmount = __tokenAmount
-        .mul(__mTokenReserveAmount)
-        .div(__totalSupply);
-
-        // The exchange rate always has 18 decimals.
-        return _getUsdValueForUnderlyingTokenAmount(
-            IDmmController(__dmmController).getUnderlyingTokenForDmm(__mToken),
-            __underlyingTokenValuator,
-            __mTokenDecimals,
-            mTokenAmount.mul(IDmmController(__dmmController).getExchangeRate(__mToken)).div(1e18)
-        );
-    }
-
-    function _getUsdValueForUnderlyingTokenAmount(
-        address __underlyingToken,
-        address __underlyingTokenValuator,
-        uint8 __decimals,
-        uint __amount
-    ) public view returns (uint) {
-        if (__decimals < 18) {
-            __amount = __amount.mul((10 ** (18 - uint(__decimals))));
-        } else if (__decimals > 18) {
-            __amount = __amount.div((10 ** (uint(__decimals) - 18)));
-        }
-        return IUnderlyingTokenValuator(__underlyingTokenValuator).getTokenValue(__underlyingToken, __amount);
-    }
 
     /**
      * @return The amount of `__token` paid for the burn.
@@ -254,8 +83,7 @@ library DMGYieldFarmingV2Lib {
                 "DMGYieldFarmingV2Lib::_payHarvestFee: UNKNOWN_TOKEN_TYPE"
             );
 
-            if (tokenType == DMGYieldFarmingV2Lib.TokenType.UniswapLpToken ||
-                tokenType == DMGYieldFarmingV2Lib.TokenType.UniswapPureLpToken) {
+            if (tokenType == DMGYieldFarmingV2Lib.TokenType.UniswapLpToken) {
                 _payFeesWithUniswapToken(
                     state,
                     __user,
@@ -278,13 +106,13 @@ library DMGYieldFarmingV2Lib {
     function _payFeesWithUniswapToken(
         IDMGYieldFarmingV2 state,
         address __user,
-        address __uniswapToken,
+        address __token,
         uint __tokenFeeAmount,
         address underlyingToken
     ) public {
 
-        // This is the token that is NOT the underlyingToken. Meaning, it needs to be converted to underlyingToken so
-        // it can be added to underlyingToken amount, swapped (as underlyingToken) to DMG, and burned.
+        // This is the __token that is NOT the underlyingToken. Meaning, it needs to be converted to underlyingToken so
+        // it can be swapped to DMG and burned.
         address tokenToSwap;
         address token0;
         uint amountToBurn;
@@ -294,11 +122,11 @@ library DMGYieldFarmingV2Lib {
             // --------------------------------------------------
             // This code is taken from the `UniswapV2Router02` to more efficiently convert the LP __token *TO* its
             // reserve tokens
-            IERC20(__uniswapToken).safeTransfer(__uniswapToken, __tokenFeeAmount);
-            (uint amount0, uint amount1) = IUniswapV2Pair(__uniswapToken).burn(address(this));
-            token0 = IUniswapV2Pair(__uniswapToken).token0();
+            IERC20(__token).safeTransfer(__token, __tokenFeeAmount);
+            (uint amount0, uint amount1) = IUniswapV2Pair(__token).burn(address(this));
+            token0 = IUniswapV2Pair(__token).token0();
 
-            tokenToSwap = token0 == underlyingToken ? IUniswapV2Pair(__uniswapToken).token1() : token0;
+            tokenToSwap = token0 == underlyingToken ? IUniswapV2Pair(__token).token1() : token0;
 
             amountToBurn = token0 == underlyingToken ? amount0 : amount1;
             amountToSwap = token0 != underlyingToken ? amount0 : amount1;
@@ -306,10 +134,9 @@ library DMGYieldFarmingV2Lib {
 
         address dmg = state.dmgToken();
         if (tokenToSwap != dmg) {
-            // Exchanges `tokenToSwap` to `underlyingToken`, so `underlyingToken` can be swapped to DMG and burned.
             // This code is taken from the `UniswapV2Router02` to more efficiently swap *TO* the underlying __token
-            IERC20(tokenToSwap).safeTransfer(__uniswapToken, amountToSwap);
-            (uint reserve0, uint reserve1,) = IUniswapV2Pair(__uniswapToken).getReserves();
+            IERC20(tokenToSwap).safeTransfer(__token, amountToSwap);
+            (uint reserve0, uint reserve1,) = IUniswapV2Pair(__token).getReserves();
             uint amountOut = UniswapV2Library.getAmountOut(
                 amountToSwap,
                 tokenToSwap == token0 ? reserve0 : reserve1,
@@ -317,7 +144,7 @@ library DMGYieldFarmingV2Lib {
             );
 
             (uint amount0Out, uint amount1Out) = tokenToSwap == token0 ? (uint(0), amountOut) : (amountOut, uint(0));
-            IUniswapV2Pair(__uniswapToken).swap(amount0Out, amount1Out, address(this), new bytes(0));
+            IUniswapV2Pair(__token).swap(amount0Out, amount1Out, address(this), new bytes(0));
 
             amountToBurn = amountToBurn.add(amountOut);
         }
@@ -328,10 +155,10 @@ library DMGYieldFarmingV2Lib {
             // We can just add the DMG to be swapped with the amount to burn.
             amountToSwap = amountToSwap.add(dmgToBurn);
             IDMGToken(dmg).burn(amountToSwap);
-            emit HarvestFeePaid(__user, __uniswapToken, __tokenFeeAmount, amountToSwap);
+            emit HarvestFeePaid(__user, __token, __tokenFeeAmount, amountToSwap);
         } else {
             IDMGToken(dmg).burn(dmgToBurn);
-            emit HarvestFeePaid(__user, __uniswapToken, __tokenFeeAmount, dmgToBurn);
+            emit HarvestFeePaid(__user, __token, __tokenFeeAmount, dmgToBurn);
         }
     }
 
@@ -356,7 +183,7 @@ library DMGYieldFarmingV2Lib {
             paths[1] = __weth;
             paths[2] = __dmg;
         }
-        // We sell the underlyingToken to DMG and burn it.
+        // We sell the non-mToken to DMG and burn it.
         uint[] memory amountsOut = IUniswapV2Router02(state.uniswapV2Router()).swapExactTokensForTokens(
             __amountToBurn,
         /* amountOutMin */ 1,

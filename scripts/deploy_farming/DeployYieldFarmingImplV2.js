@@ -4,15 +4,13 @@ const environment = process.env.ENVIRONMENT ? process.env.ENVIRONMENT : throwErr
 const Web3 = require('web3');
 const {BN} = require('ethereumjs-util');
 const {setupLoader} = require('@openzeppelin/contract-loader');
-const {deployContract, linkContract} = require('../ContractUtils');
+const {deployContract} = require('../ContractUtils');
 
 const web3 = new Web3(provider);
-const defaultGasPrice = 82e9;
+const defaultGasPrice = 81e9;
 
 exports.defaultGasPrice = defaultGasPrice;
 exports.web3 = web3;
-
-const v2LibAddress = '0xa5d7A11A2f43893535AE8D14135964fdB6F6abe1';
 
 const main = async () => {
   let deployer;
@@ -26,11 +24,9 @@ const main = async () => {
     throw Error("Invalid deployer, found nothing");
   }
 
-  const loader = setupLoader({provider: web3, defaultSender: deployer, defaultGasPrice: defaultGasPrice});
+  const loader = setupLoader({provider: web3, defaultSender: deployer, defaultGasPrice: 8e9});
 
   const DMGYieldFarmingV2 = loader.truffle.fromArtifact('DMGYieldFarmingV2');
-  await linkContract(DMGYieldFarmingV2, 'DMGYieldFarmingV2Lib', v2LibAddress);
-
   await deployContract(
     DMGYieldFarmingV2,
     [],
