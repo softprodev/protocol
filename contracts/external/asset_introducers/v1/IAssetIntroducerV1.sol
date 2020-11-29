@@ -16,6 +16,7 @@
 
 
 pragma solidity ^0.5.0;
+pragma experimental ABIEncoderV2;
 
 import "../AssetIntroducerData.sol";
 
@@ -25,17 +26,20 @@ interface IAssetIntroducerV1 {
     // ***** Events
     // *************************
 
-    event AssetIntroducerBought(uint indexed tokenId, address indexed buyer, uint dmgAmount);
+    event BaseURIChanged(string newBaseURI);
+    event SignatureValidated(address indexed signer, uint nonce);
+    event AssetIntroducerBought(uint indexed tokenId, address indexed buyer, address indexed recipient, uint dmgAmount);
+    event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance);
 
     // *************************
     // ***** Admin Functions
     // *************************
 
-    function createAssetIntroducerForPrimaryMarket(
-        string calldata countryCode,
-        AssetIntroducerData.AssetIntroducerType introducerType,
-        uint dmgPriceAmount
-    ) external returns (uint);
+    function createAssetIntroducersForPrimaryMarket(
+        string[] calldata countryCode,
+        AssetIntroducerData.AssetIntroducerType[] calldata introducerType,
+        uint[] calldata dmgPriceAmount
+    ) external returns (uint[] memory);
 
     function setDollarAmountToManageByTokenId(
         uint tokenId,
@@ -49,17 +53,105 @@ interface IAssetIntroducerV1 {
     ) external;
 
     // *************************
+    // ***** Misc Functions
+    // *************************
+
+    /**
+     * @return  The domain separator used in off-chain signatures. See EIP 712 for more:
+     *          https://eips.ethereum.org/EIPS/eip-712
+     */
+    function domainSeparator() external view returns (bytes32);
+
+    /**
+     * @return  The address of the DMG token
+     */
+    function dmg() external view returns (address);
+
+    function dmmController() external view returns (address);
+
+    function underlyingTokenValuator() external view returns (address);
+
+    function tokenURI(
+        uint __tokenId
+    ) external view returns (string memory);
+
+    function setBaseURI(
+        string calldata __baseURI
+    ) external;
+
+    /**
+     * @return  The discount applied to the price of the asset introducer for being an early purchaser. Represented as
+     *          a number with 18 decimals, such that 0.1 * 1e18 == 10%
+     */
+    function getAssetIntroducerDiscount() external view returns (uint);
+
+    /**
+     * @return  The price of the asset introducer, represented in USD
+     */
+    function getAssetIntroducerPriceUsd(
+        uint tokenId
+    ) external returns (uint);
+
+    /**
+     * @return  The price of the asset introducer, represented in DMG. DMG is the needed currency to purchase an asset
+     *          introducer NFT.
+     */
+    function getAssetIntroducerPriceDmg(
+        uint tokenId
+    ) external returns (uint);
+
+    /**
+     * @return  The total amount of DMG locked in the asset introducer reserves
+     */
+    function getTotalDmgLocked() external view returns (uint);
+
+    /**
+     * @return  The amount that this asset introducer can manager, represented in wei format (a number with 18
+     *          decimals). Meaning, 10,000.25 * 1e18 == $10,000.25
+     */
+    function getDollarAmountToManageByTokenId(
+        uint tokenId
+    ) external view returns (uint);
+
+    /**
+     * @return  The amount of DMG that this asset introducer has locked in order to maintain a valid status as an asset
+     *          introducer.
+     */
+    function getDmgLockedByTokenId(
+        uint tokenId
+    ) external view returns (uint);
+
+    function getAssetIntroducersByCountryCode(
+        string calldata countryCode
+    ) external view returns (AssetIntroducerData.AssetIntroducer[] memory);
+
+    function getAllAssetIntroducers() external view returns (AssetIntroducerData.AssetIntroducer[] memory);
+
+    function getPrimaryMarketAssetIntroducers() external view returns (AssetIntroducerData.AssetIntroducer[] memory);
+
+    function getSecondaryMarketAssetIntroducers() external view returns (AssetIntroducerData.AssetIntroducer[] memory);
+
+    // *************************
     // ***** User Functions
     // *************************
 
+    function getNonceByUser(address user) external view returns (uint);
+
+    /**
+     * Buys the slot for the appropriate amount of DMG, by attempting to transfer the DMG from `msg.sender` to this
+     * contract
+     */
     function buyAssetIntroducerSlot(
         uint tokenId
     ) external returns (bool);
 
+    function nonceOf(
+        address user
+    ) external view returns (uint);
+
     function buyAssetIntroducerSlotBySig(
         uint tokenId,
         address recipient,
-        uint amount,
         uint nonce,
         uint expiry,
         uint8 v,
@@ -67,11 +159,23 @@ interface IAssetIntroducerV1 {
         bytes32 s
     ) external returns (bool);
 
-    function getAssetIntroducerPrice(
-        uint tokenId
-    ) external returns (uint);
+    function buyAssetIntroducerSlotBySigWithDmgPermit(
+        uint __tokenId,
+        address __recipient,
+        uint __nonce,
+        uint __expiry,
+        uint8 __v,
+        bytes32 __r,
+        bytes32 __s,
+        AssetIntroducerData.DmgApprovalStruct calldata dmgApprovalStruct
+    ) external returns (bool);
 
-    function getCurrentVotesByUser(
+    function getPriorVotes(
+        address user,
+        uint blockNumber
+    ) external view returns (uint128);
+
+    function getCurrentVotes(
         address user
     ) external view returns (uint);
 
@@ -79,23 +183,43 @@ interface IAssetIntroducerV1 {
         address user
     ) external view returns (uint);
 
-    function getTotalDmgLocked() external view returns (uint);
-
-    function getDollarAmountToManageByTokenId(
+    /**
+     * @return  The amount of capital that has been withdrawn by this asset introducer, denominated in USD with 18
+     *          decimals
+     */
+    function getDeployedCapitalByTokenId(
         uint tokenId
     ) external view returns (uint);
 
-    function getDmgLockedByTokenId(
-        uint tokenId
+    function getTotalWithdrawnUnderlyingByTokenId(
+        uint tokenId,
+        address underlyingToken
     ) external view returns (uint);
-
-    function getAssetIntroducersByCountryCode(
-        string calldata countryCode
-    ) external view returns (uint[] memory);
 
     /**
-     * @return  The address of the DMG token
+     * @dev Deactivates the specified asset introducer from being able to withdraw funds. Doing so enables it to
+     *      be transferred. NOTE: NFTs can only be deactivated once all deployed capital is returned.
      */
-    function dmg() external view returns (address);
+    function deactivateAssetIntroducerByTokenId(
+        uint tokenId
+    ) external;
+
+    function withdrawCapitalByTokenId(
+        uint tokenId,
+        address token,
+        uint amount
+    ) external;
+
+    function depositCapitalByTokenId(
+        uint tokenId,
+        address token,
+        uint amount
+    ) external;
+
+    function payInterestByTokenId(
+        uint tokenId,
+        address token,
+        uint amount
+    ) external;
 
 }
