@@ -21,7 +21,7 @@ pragma solidity >=0.5.0;
  * @dev Optional metadata extension for ERC-721 non-fungible token standard.
  * See https://github.com/ethereum/EIPs/blob/master/EIPS/eip-721.md.
  */
-interface IERC721Metadata {
+interface ERC721Metadata {
 
     /**
      * @dev Returns a descriptive name for a collection of NFTs in this contract.
@@ -30,7 +30,7 @@ interface IERC721Metadata {
     function name()
     external
     view
-    returns (string memory);
+    returns (string memory _name);
 
     /**
      * @dev Returns a abbreviated name for a collection of NFTs in this contract.
@@ -39,7 +39,7 @@ interface IERC721Metadata {
     function symbol()
     external
     view
-    returns (string memory);
+    returns (string memory _symbol);
 
     /**
      * @dev Returns a distinct Uniform Resource Identifier (URI) for a given asset. It Throws if
