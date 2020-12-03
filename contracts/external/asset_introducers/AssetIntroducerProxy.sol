@@ -24,25 +24,35 @@ import "./v1/IAssetIntroducerV1Initializable.sol";
 contract AssetIntroducerProxy is AdminUpgradeabilityProxy {
 
     /**
-     * @param logic     The address of the initial implementation.
-     * @param admin     The address of the proxy administrator.
-     * @param owner     The address of the owner of the implementation of the contract.
-     * @param guardian  The address of the guardian of the implementation contract.
-     * @param dmgToken  The address of the DMG token.
+     * @param logic                     The address of the initial implementation.
+     * @param admin                     The address of the proxy administrator.
+     * @param baseURI                   The URL that is used as the basis for token URI information.
+     * @param openSeaProxyRegistry      The address of the Open Sea registry proxy, which is used for easing the trading ux.
+     * @param owner                     The address of the owner of the implementation of the contract.
+     * @param guardian                  The address of the guardian of the implementation contract.
+     * @param dmgToken                  The address of the DMG token.
+     * @param dmmController             The address of the DMM controller.
+     * @param underlyingTokenValuator   The address of the DMM token valuator.
+     * @param assetIntroducerDiscount   The address of the contract that implements the discount logic.
      */
     constructor(
         address logic,
         address admin,
+        string memory baseURI,
+        address openSeaProxyRegistry,
         address owner,
         address guardian,
-        address dmgToken
+        address dmgToken,
+        address dmmController,
+        address underlyingTokenValuator,
+        address assetIntroducerDiscount
     )
     AdminUpgradeabilityProxy(
         logic,
         admin,
         abi.encodePacked(
             IAssetIntroducerV1Initializable(address(0)).initialize.selector,
-            abi.encode(owner, guardian, dmgToken)
+            abi.encode(baseURI, openSeaProxyRegistry, owner, guardian, dmgToken, dmmController, underlyingTokenValuator, assetIntroducerDiscount)
         )
     )
     public {}
